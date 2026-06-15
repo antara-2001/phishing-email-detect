@@ -15,8 +15,18 @@ from nltk.stem import WordNetLemmatizer
 # NLTK
 # -----------------------------
 
-nltk.download("stopwords")
-nltk.download("wordnet")
+import nltk
+
+try:
+    stop_words = set(stopwords.words("english"))
+except:
+    nltk.download("stopwords")
+    stop_words = set(stopwords.words("english"))
+
+try:
+    nltk.data.find("corpora/wordnet")
+except:
+    nltk.download("wordnet")
 
 stop_words = set(stopwords.words("english"))
 lemmatizer = WordNetLemmatizer()
@@ -76,6 +86,9 @@ app = Dash(
     external_stylesheets=[
         dbc.themes.CYBORG
     ]
+)
+
+server = app.server
 )
 
 # -----------------------------
@@ -299,29 +312,67 @@ def predict_email(
     email
 ):
 
+    if not email or email.strip() == "":
+
+        empty_gauge = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=0,
+                title={"text":"Phishing Risk (%)"}
+            )
+        )
+
+        return (
+            dbc.Alert(
+                "Please enter an email.",
+                color="warning"
+            ),
+            empty_gauge,
+            "None"
+        )
+
     cleaned = clean_text(email)
 
-    vector = tfidf.transform(
-        [cleaned]
-    )
+    vector = tfidf.transform([cleaned])
 
-    pred = model.predict(
-        vector
-    )[0]
+    pred = model.predict(vector)[0]
 
-    prob = (
-        model.predict_proba(
-            vector
-        )[0][1] * 100
-    )
+    try:
+
+        prob = (
+            model.predict_proba(vector)[0][1]
+            * 100
+        )
+
+    except:
+
+        prob = 50
 
     gauge = go.Figure(
         go.Indicator(
             mode="gauge+number",
             value=prob,
             title={
-                "text":
-                "Phishing Risk (%)"
+                "text":"Phishing Risk (%)"
+            },
+            gauge={
+                "axis":{
+                    "range":[0,100]
+                },
+                "steps":[
+                    {
+                        "range":[0,40],
+                        "color":"green"
+                    },
+                    {
+                        "range":[40,70],
+                        "color":"yellow"
+                    },
+                    {
+                        "range":[70,100],
+                        "color":"red"
+                    }
+                ]
             }
         )
     )
@@ -362,7 +413,6 @@ def predict_email(
         ", ".join(found)
         if found else "None"
     )
-
 # -----------------------------
 # RUN
 # -----------------------------
@@ -370,4 +420,8 @@ def predict_email(
 server = app.server
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8050)
+    app.run(
+        host="0.0.0.0",
+        port=8050,
+        debug=False
+    )
