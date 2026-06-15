@@ -1,75 +1,60 @@
-import streamlit as st
+from dash import Dash, html, dcc, Input, Output, State, dash_table
+import dash_bootstrap_components as dbc
+import plotly.graph_objects as go
+import plotly.express as px
 import pandas as pd
-import numpy as np
 import joblib
-import json
-import nltk
 import re
 import string
+import nltk
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# Download NLTK resources
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('omw-1.4')
-
 # -----------------------------
-# PAGE CONFIG
+# NLTK
 # -----------------------------
 
-st.set_page_config(
-    page_title="Phishing Email Detector",
-    page_icon="📧",
-    layout="wide"
-)
-
-# -----------------------------
-# LOAD MODEL FILES
-# -----------------------------
-
-@st.cache_resource
-def load_model():
-    model = joblib.load("phishing_model.pkl")
-    vectorizer = joblib.load("tfidf_vectorizer.pkl")
-    return model, vectorizer
-
-model, tfidf = load_model()
-
-# -----------------------------
-# LOAD METRICS
-# -----------------------------
-
-try:
-    with open("metrics.json", "r") as f:
-        metrics = json.load(f)
-except:
-    metrics = {
-        "accuracy": 0,
-        "precision": 0,
-        "recall": 0,
-        "f1": 0,
-        "roc_auc": 0
-    }
-
-# -----------------------------
-# TEXT PREPROCESSING
-# -----------------------------
+nltk.download("stopwords")
+nltk.download("wordnet")
 
 stop_words = set(stopwords.words("english"))
 lemmatizer = WordNetLemmatizer()
+
+# -----------------------------
+# LOAD MODEL
+# -----------------------------
+
+model = joblib.load("phishing_model.pkl")
+tfidf = joblib.load("tfidf_vectorizer.pkl")
+
+# -----------------------------
+# METRICS
+# -----------------------------
+
+ACCURACY = 98.39
+PRECISION = 98.20
+RECALL = 98.72
+F1 = 98.46
+ROC_AUC = 99.83
+
+# -----------------------------
+# TEXT CLEANING
+# -----------------------------
 
 def clean_text(text):
 
     text = str(text).lower()
 
     text = re.sub(r"http\S+", "", text)
-
     text = re.sub(r"\d+", "", text)
 
     text = text.translate(
-        str.maketrans("", "", string.punctuation)
+        str.maketrans(
+            "",
+            "",
+            string.punctuation
+        )
     )
 
     words = text.split()
@@ -83,105 +68,304 @@ def clean_text(text):
     return " ".join(words)
 
 # -----------------------------
-# HEADER
+# DASH APP
 # -----------------------------
 
-st.title("AI-Powered Phishing Email Detection")
-
-st.markdown("""
-Detect whether an email is **Phishing** or **Legitimate**
-using Natural Language Processing and Machine Learning.
-""")
-
-st.divider()
-
-# -----------------------------
-# MODEL PERFORMANCE
-# -----------------------------
-
-st.subheader("Model Performance")
-
-col1, col2, col3, col4, col5 = st.columns(5)
-
-col1.metric(
-    "Accuracy",
-    f"{metrics['accuracy']:.2%}"
-)
-
-col2.metric(
-    "Precision",
-    f"{metrics['precision']:.2%}"
-)
-
-col3.metric(
-    "Recall",
-    f"{metrics['recall']:.2%}"
-)
-
-col4.metric(
-    "F1 Score",
-    f"{metrics['f1']:.2%}"
-)
-
-col5.metric(
-    "ROC-AUC",
-    f"{metrics['roc_auc']:.2%}"
-)
-
-st.divider()
-
-# -----------------------------
-# EMAIL INPUT
-# -----------------------------
-
-st.subheader("Test an Email")
-
-email_text = st.text_area(
-    "Paste Email Content Here",
-    height=250
+app = Dash(
+    __name__,
+    external_stylesheets=[
+        dbc.themes.CYBORG
+    ]
 )
 
 # -----------------------------
-# PREDICTION
+# KPI CARDS
 # -----------------------------
 
-if st.button("Analyze Email"):
+def metric_card(title, value):
 
-    if email_text.strip() == "":
-        st.warning("Please enter an email.")
+    return dbc.Card(
+        dbc.CardBody(
+            [
+                html.H6(title),
+                html.H3(value)
+            ]
+        )
+    )
+
+# -----------------------------
+# RADAR CHART
+# -----------------------------
+
+radar = go.Figure()
+
+radar.add_trace(
+    go.Scatterpolar(
+        r=[
+            ACCURACY,
+            PRECISION,
+            RECALL,
+            F1,
+            ROC_AUC
+        ],
+        theta=[
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "F1",
+            "ROC-AUC"
+        ],
+        fill="toself"
+    )
+)
+
+radar.update_layout(
+    title="Model Performance"
+)
+
+# -----------------------------
+# DONUT CHART
+# -----------------------------
+
+donut = px.pie(
+    names=[
+        "Legitimate",
+        "Phishing"
+    ],
+    values=[
+        41243,
+        41243
+    ],
+    hole=0.6
+)
+
+# -----------------------------
+# LAYOUT
+# -----------------------------
+
+app.layout = dbc.Container(
+    [
+
+        html.H1(
+            "AI Phishing Email Detection Dashboard",
+            className="text-center my-4"
+        ),
+
+        dbc.Row(
+            [
+                dbc.Col(
+                    metric_card(
+                        "Accuracy",
+                        "98.39%"
+                    )
+                ),
+
+                dbc.Col(
+                    metric_card(
+                        "Precision",
+                        "98.20%"
+                    )
+                ),
+
+                dbc.Col(
+                    metric_card(
+                        "Recall",
+                        "98.72%"
+                    )
+                ),
+
+                dbc.Col(
+                    metric_card(
+                        "F1",
+                        "98.46%"
+                    )
+                ),
+
+                dbc.Col(
+                    metric_card(
+                        "ROC-AUC",
+                        "99.83%"
+                    )
+                ),
+            ]
+        ),
+
+        html.Br(),
+
+        dbc.Row(
+            [
+
+                dbc.Col(
+                    dcc.Graph(
+                        figure=radar
+                    ),
+                    width=6
+                ),
+
+                dbc.Col(
+                    dcc.Graph(
+                        figure=donut
+                    ),
+                    width=6
+                ),
+            ]
+        ),
+
+        html.Hr(),
+
+        html.H3(
+            "Email Scanner"
+        ),
+
+        dcc.Textarea(
+            id="email-input",
+            style={
+                "width":"100%",
+                "height":"200px"
+            }
+        ),
+
+        html.Br(),
+
+        dbc.Button(
+            "Analyze Email",
+            id="analyze-btn",
+            color="danger"
+        ),
+
+        html.Br(),
+        html.Br(),
+
+        html.Div(
+            id="prediction-output"
+        ),
+
+        html.Br(),
+
+        dcc.Graph(
+            id="risk-gauge"
+        ),
+
+        html.Hr(),
+
+        html.H4(
+            "Suspicious Keywords"
+        ),
+
+        html.Div(
+            id="keywords-output"
+        )
+    ],
+    fluid=True
+)
+
+# -----------------------------
+# CALLBACK
+# -----------------------------
+
+@app.callback(
+    [
+        Output(
+            "prediction-output",
+            "children"
+        ),
+
+        Output(
+            "risk-gauge",
+            "figure"
+        ),
+
+        Output(
+            "keywords-output",
+            "children"
+        )
+    ],
+
+    Input(
+        "analyze-btn",
+        "n_clicks"
+    ),
+
+    State(
+        "email-input",
+        "value"
+    ),
+
+    prevent_initial_call=True
+)
+
+def predict_email(
+    n_clicks,
+    email
+):
+
+    cleaned = clean_text(email)
+
+    vector = tfidf.transform(
+        [cleaned]
+    )
+
+    pred = model.predict(
+        vector
+    )[0]
+
+    prob = (
+        model.predict_proba(
+            vector
+        )[0][1] * 100
+    )
+
+    gauge = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+            value=prob,
+            title={
+                "text":
+                "Phishing Risk (%)"
+            }
+        )
+    )
+
+    keywords = [
+        "verify",
+        "account",
+        "password",
+        "click",
+        "urgent",
+        "bank",
+        "security",
+        "login"
+    ]
+
+    found = [
+        k for k in keywords
+        if k in cleaned
+    ]
+
+    if pred == 1:
+
+        result = dbc.Alert(
+            f"PHISHING EMAIL ({prob:.2f}%)",
+            color="danger"
+        )
+
     else:
 
-        cleaned_text = clean_text(email_text)
-
-        vector = tfidf.transform(
-            [cleaned_text]
+        result = dbc.Alert(
+            f"LEGITIMATE EMAIL ({100-prob:.2f}%)",
+            color="success"
         )
 
-        prediction = model.predict(
-            vector
-        )[0]
+    return (
+        result,
+        gauge,
+        ", ".join(found)
+        if found else "None"
+    )
 
-        confidence = (
-            model.predict_proba(vector)
-            .max() * 100
-        )
+# -----------------------------
+# RUN
+# -----------------------------
 
-        st.subheader("Prediction Result")
-
-        if prediction == 1:
-
-            st.error(
-                f"PHISHING EMAIL\n\nConfidence: {confidence:.2f}%"
-            )
-
-        else:
-
-            st.success(
-                f"LEGITIMATE EMAIL\n\nConfidence: {confidence:.2f}%"
-            )
-
-        st.progress(
-            float(confidence / 100)
-        )
-
-st.divider()
+if __name__ == "__main__":
+    app.run(debug=True)
