@@ -1,4 +1,4 @@
-from dash import Dash, html, dcc, Input, Output, State, dash_table
+from dash import Dash, html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 import plotly.graph_objects as go
 import plotly.express as px
@@ -89,7 +89,6 @@ app = Dash(
 )
 
 server = app.server
-)
 
 # -----------------------------
 # KPI CARDS
@@ -419,9 +418,11 @@ def predict_email(
 
 server = app.server
 
+import os
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
-        port=8050,
+        port=int(os.environ.get("PORT", 8050)),
         debug=False
     )
